@@ -38,18 +38,20 @@ public class SecurityService {
 //    This method does not satisfy the 10th requirement
 //    10th: If the system is armed, reset all sensors to inactive.
     public void setArmingStatus(ArmingStatus armingStatus) {
-        if (isCatDetected) {
-            if (armingStatus == ArmingStatus.ARMED_HOME) {
+        if (armingStatus == ArmingStatus.DISARMED) {
+            setAlarmStatus(AlarmStatus.NO_ALARM);
+        } else {
+            // Deactivate all sensors if system is armed (home or away)
+            List<Sensor> sensors = new ArrayList<>(securityRepository.getSensors());
+            sensors.forEach(sensor -> {
+                sensor.setActive(false);
+                securityRepository.updateSensor(sensor);
+            });
+
+            // If a cat is detected and system is armed home, set alarm to ALARM
+            if (isCatDetected && armingStatus == ArmingStatus.ARMED_HOME) {
                 setAlarmStatus(AlarmStatus.ALARM);
             }
-        } else {
-            if (armingStatus != ArmingStatus.DISARMED) {
-                List<Sensor> sensors = new ArrayList<>(securityRepository.getSensors());
-                sensors.forEach(sensor -> {
-                    sensor.setActive(false);
-                    securityRepository.updateSensor(sensor);
-                });
-            } else {setAlarmStatus(AlarmStatus.NO_ALARM);}
         }
         securityRepository.setArmingStatus(armingStatus);
     }
@@ -67,6 +69,8 @@ public class SecurityService {
 //
     private void catDetected(Boolean cat) {
         isCatDetected = cat;
+        statusListeners.forEach(listener -> listener.catDetected(isCatDetected));
+
         if (isCatDetected) {
             switch (securityRepository.getArmingStatus()){
                 case DISARMED, ARMED_AWAY -> {return;}
@@ -147,16 +151,9 @@ public class SecurityService {
 //    5th: If a sensor is activated while already active and the system is in pending state, change it to alarm state.
     public void changeSensorActivationStatus(Sensor sensor, Boolean active) {
         if (active) {
-        //if(!sensor.getActive() && active) {
             handleSensorActivated();
         } else {handleSensorDeactivated();}
 
-//        else if (sensor.getActive() && !active) {
-//            handleSensorDeactivated();
-//        }
-//        else if (sensor.getActive() && active && securityRepository.getAlarmStatus() == AlarmStatus.PENDING_ALARM) {
-//            handleSensorActivated();
-//        }
         sensor.setActive(active);
         securityRepository.updateSensor(sensor);
     }
